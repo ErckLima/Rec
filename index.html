@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gravador de Áudio</title>
+</head>
+<body>
+    <h1>Gravador de Áudio</h1>
+    <p>Clique em 'Gravar' para iniciar a gravação e 'Parar' para interromper e salvar.</p>
+
+    <label for="sampleRate">Taxa de Amostragem:</label>
+    <select id="sampleRate">
+        <option value="8000">8000 Hz</option>
+        <option value="11025">11025 Hz</option>
+        <option value="16000">16000 Hz</option>
+        <option value="22050">22050 Hz</option>
+        <option value="32000">32000 Hz</option>
+        <option value="37800">37800 Hz</option>
+        <option value="44100" selected>44100 Hz</option>
+        <option value="48000">48000 Hz</option>
+        <option value="88200">88200 Hz</option>
+        <option value="96000">96000 Hz</option>
+        <option value="192000">192000 Hz</option>
+    </select>
+
+    <button id="startButton">Gravar</button>
+    <button id="stopButton" disabled>Parar</button>
+    <p id="timestamp">Duração</p>
+
+    <script>
+        let audioContext;
+        let mediaRecorder;
+        let chunks = [];
+        let startTime;
+        let recording = false;
+        let audios = 1;
+
+        const sampleRateSelect = document.getElementById("sampleRate");
+        const startButton = document.getElementById("startButton");
+        const stopButton = document.getElementById("stopButton");
+        const timestampLabel = document.getElementById("timestamp");
+
+        // Verifica se já tem permissão ao carregar a página
+        checkMicrophonePermission();
+
+        startButton.addEventListener("click", startRecording);
+        stopButton.addEventListener("click", stopRecording);
+
+        const processo = document.createElement("p");
+        
+
+        async function checkMicrophonePermission() {
+            const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+            
+            if (permissionStatus.state === 'granted') {
+                console.log("Permissão já concedida.");
+                startRecordingWithoutPermission();
+            }
+        }
+
+        async function startRecording() {
+            
+            processo.textContent = "Gravando...";
+            document.body.appendChild(processo);
+            const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+
+            if (permissionStatus.state === 'granted') {
+                startRecordingWithoutPermission();
+            } else {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    startRecordingWithStream(stream);
+                } catch (error) {
+                    console.error("Erro ao obter permissão para o microfone:", error);
+                }
+            }
+        }
+
+        function startRecordingWithStream(stream) {
+            const sampleRate = parseInt(sampleRateSelect.value);
+            audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.ondataavailable = event => chunks.push(event.data);
+            mediaRecorder.onstop = saveRecording;
+
+            startTime = Date.now();
+            recording = true;
+            chunks = [];
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            timestampLabel.textContent = "Duração: 0 s";
+
+            mediaRecorder.start();
+            updateTimestamp();
+        }
+
+        function startRecordingWithoutPermission() {
+            // Lógica para iniciar a gravação sem permissão
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            mediaRecorder = new MediaRecorder(audioContext.createMediaStreamDestination().stream);
+
+            mediaRecorder.ondataavailable = event => chunks.push(event.data);
+            mediaRecorder.onstop = saveRecording;
+
+            startTime = Date.now();
+            recording = true;
+            chunks = [];
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            timestampLabel.textContent = "Duração: 0 s";
+
+            mediaRecorder.start();
+            updateTimestamp();
+        }
+
+        function stopRecording() {
+            processo.textContent = "Gravou!";
+            document.body.appendChild(processo);
+            if (recording) {
+                mediaRecorder.stop();
+                recording = false;
+                startButton.disabled = false;
+                stopButton.disabled = true;
+            }
+        }
+
+        async function saveRecording() {
+            const audioBlob = new Blob(chunks, { type: "audio/wav" });
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            const a = document.createElement("a");
+            a.href = audioUrl;
+            a.download = `AudioPCM_${new Date().toISOString()}.wav`;
+            a.textContent = `Clique aqui para baixar o ${audios} audio!`;
+
+            const p = document.createElement("p");
+            p.appendChild(a);
+            document.body.appendChild(p);
+
+            audios ++
+
+            const duration = (Date.now() - startTime) / 1000;
+            timestampLabel.textContent = `Duração: ${duration.toFixed(2)} s`;
+
+            chunks = [];
+        }
+
+        function updateTimestamp() {
+            if (recording) {
+                const duration = (Date.now() - startTime) / 1000;
+                timestampLabel.textContent = `Duração: ${duration.toFixed(2)} s`;
+                requestAnimationFrame(updateTimestamp);
+            }
+        }
+    </script>
+</body>
+</html>
